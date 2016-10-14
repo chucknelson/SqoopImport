@@ -20,9 +20,9 @@ helperPath="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 echo "$currentTimestamp - Initializing helpers"
 
-for helper in $helperPath/*Helper.sh; do
+for helper in "$helperPath"/*Helper.sh; do
   echo "$currentTimestamp - Initialized $helper"
-  source $helper
+  source "$helper"
 done
 
 
