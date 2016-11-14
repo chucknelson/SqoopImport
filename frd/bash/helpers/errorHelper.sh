@@ -39,7 +39,7 @@ errorExit() {
   exit $exitCode
 }
 
-# checkNumArgument <Number of Args> <Expected Number of Args> <Message>
+# checkNumArguments <Number of Args> <Expected Number of Args> <Message>
 checkNumArguments() {
   if [[ $1 -ne $2 ]]
   then
