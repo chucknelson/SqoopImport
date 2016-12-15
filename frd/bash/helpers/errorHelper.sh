@@ -32,6 +32,15 @@ try() {
   set -e
 }
 
+# exitWithErrorCheck
+# If we encountered any errors (via try()), exit with error status
+exitWithErrorCheck() {
+  if [[ $ERRCNT -gt 0 ]]
+  then
+    exit 1
+  fi
+}
+
 # errorExit <Exit Code>
 errorExit() {
   local exitCode=$1
