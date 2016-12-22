@@ -25,19 +25,32 @@ trap - INT TERM EXIT
 #--------------------
 
 # Script arguments / config
-if [ ${1+x} ]
-then
-  configFileName="$1"
-fi
-
-if [ ${2+x} ]
-then
-  importFileDir="$2"
-fi
-
 # Defaults
 DEFAULT_CONFIG="sqoop_import.cfg"
 DEFAULT_TABLE_LIST="table_list.txt"
+
+# parseOptions [options/parameters]
+parseOptions() {
+  while [[ $# -gt 0 ]]
+  do
+    key="$1"
+    case "$key" in
+      -c|--configfilename)
+      configFileName="$2"
+      shift # past option
+      ;;
+      -i|--importfiledir)
+      importFileDir="$2"
+      shift # past option
+      ;;
+      *)
+      echo "Unknown option: $key"
+      errorExit 1 # something went wrong with the options
+      ;;
+    esac
+    shift # past argument or value
+  done
+}
 
 setImportFileDir() {
   if [ -z ${importFileDir+x} ]
@@ -100,6 +113,7 @@ loadTableList() {
 }
 
 # Init
+parseOptions "$@"
 setImportFileDir
 loadConfig
 loadTableList
