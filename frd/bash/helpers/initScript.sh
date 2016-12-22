@@ -25,4 +25,4 @@ for helper in "$helperPath"/*Helper.sh; do
   source "$helper"
 done
 
-
+echo "$currentTimestamp - Initialization complete"
