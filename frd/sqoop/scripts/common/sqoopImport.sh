@@ -4,7 +4,7 @@
 # Imports single or multiple database tables provided by the user.
 # Required: Configuration file, Hive database already created (if importing into Hive)
 
-# Usage: bash sqoopImport.sh [config file]
+# Usage: bash sqoopImport.sh [config file] [import file directory]
 
 # Author(s): Chuck Nelson
 
@@ -30,9 +30,24 @@ then
   configFileName="$1"
 fi
 
+if [ ${2+x} ]
+then
+  importFileDir="$2"
+fi
+
 # Defaults
 DEFAULT_CONFIG="sqoop_import.cfg"
 DEFAULT_TABLE_LIST="table_list.txt"
+
+setImportFileDir() {
+  if [ -z ${importFileDir+x} ]
+  then
+    logInfo "Import file directory not specified, using current execution directory: $currentPath"
+    importFileDir="$currentPath"
+  fi
+
+  logInfo "Using import file directory of: $importFileDir"
+}
 
 loadConfig() {
   if [ -z ${configFileName+x} ]
@@ -40,6 +55,8 @@ loadConfig() {
     logInfo "Configuration file not specified, attempting to use default of $DEFAULT_CONFIG"
     configFileName="$DEFAULT_CONFIG"
   fi
+
+  configFileName="$importFileDir/$configFileName"
 
   if [ ! -f "$configFileName" ]
   then
@@ -69,6 +86,8 @@ loadTableList() {
     tableListFileName="$DEFAULT_TABLE_LIST"
   fi
 
+  tableListFileName="$importFileDir/$tableListFileName"
+
   if [ ! -f "$tableListFileName" ]
   then
     logError "Table list file $tableListFileName not found"
@@ -81,6 +100,7 @@ loadTableList() {
 }
 
 # Init
+setImportFileDir
 loadConfig
 loadTableList
 
