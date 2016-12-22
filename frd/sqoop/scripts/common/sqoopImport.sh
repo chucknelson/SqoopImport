@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
+VERSION="0.9"
 
 # Sqoop Import
 # Imports single or multiple database tables provided by the user.
 # Required: Configuration file, Hive database already created (if importing into Hive)
-
-# Usage: bash sqoopImport.sh [config file] [import file directory]
 
 # Author(s): Chuck Nelson
 
@@ -24,13 +23,39 @@ trap - INT TERM EXIT
 
 #--------------------
 
-# Script arguments / config
 # Defaults
 DEFAULT_CONFIG="sqoop_import.cfg"
 DEFAULT_TABLE_LIST="table_list.txt"
 
-# parseOptions [options/parameters]
+# Script Info
+USAGE="
+Wrapper for Sqoop imports that uses a configuration file and an optional list of tables. This was created to reduce the number of individual hard-coded Sqoop jobs, as well as provide a tested, standard way to launch non-persistent/non-incremental Sqoop jobs.
+
+Usage: $currentScript [OPTIONS]
+
+Available options:
+  -c | --configfilename  Name of Sqoop import configuration file to use
+  -h | --help            Display usage information
+  -i | --importFileDir   Directory/location of import files (e.g., configuration file, table list)
+  -v | --version         Display version information
+"
+
+# Script arguments / config
+showVersionInfo() {
+  logInfo "$currentScript ($VERSION)"
+}
+
+showUsageInfo() {
+  echo "$USAGE" >&2 # output to STDERR
+}
+
+# parseOptions [script arguments]
 parseOptions() {
+  if [[ $# == 0 ]]
+  then
+    set -- "--help" # if no arguments, default to help
+  fi
+
   while [[ $# -gt 0 ]]
   do
     key="$1"
@@ -39,16 +64,26 @@ parseOptions() {
       configFileName="$2"
       shift # past option
       ;;
+      -h|--help)
+      showVersionInfo
+      showUsageInfo
+      exit 0
+      ;;
       -i|--importfiledir)
       importFileDir="$2"
       shift # past option
       ;;
+      -v|--version)
+      showVersionInfo
+      exit 0
+      ;;
       *)
-      echo "Unknown option: $key"
+      showUsageInfo
+      logError "Unknown option: $key"
       errorExit 1 # something went wrong with the options
       ;;
     esac
-    shift # past argument or value
+    shift # past option or value
   done
 }
 
@@ -112,8 +147,11 @@ loadTableList() {
   mapfile -t tableList < "$tableListFileName"
 }
 
-# Init
+# Options
 parseOptions "$@"
+
+# Init
+showVersionInfo
 setImportFileDir
 loadConfig
 loadTableList
