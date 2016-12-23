@@ -61,26 +61,26 @@ parseOptions() {
     key="$1"
     case "$key" in
       -c|--configfilename)
-      configFileName="$2"
-      shift # past option
-      ;;
+        configFileName="$2"
+        shift # past option
+        ;;
       -h|--help)
-      showVersionInfo
-      showUsageInfo
-      exit 0
+        showVersionInfo
+        showUsageInfo
+        exit 0
       ;;
-      -i|--importfiledir)
-      importFileDir="$2"
-      shift # past option
+        -i|--importfiledir)
+        importFileDir="$2"
+        shift # past option
       ;;
-      -v|--version)
-      showVersionInfo
-      exit 0
+        -v|--version)
+        showVersionInfo
+        exit 0
       ;;
       *)
-      showUsageInfo
-      logError "Unknown option: $key"
-      errorExit 1 # something went wrong with the options
+        showUsageInfo
+        logError "Unknown option: $key"
+        errorExit 1 # something went wrong with the options
       ;;
     esac
     shift # past option or value
@@ -187,29 +187,40 @@ buildConnectionOptions() {
 
 buildDestinationOptions() {
   sqoopCommandParams+=("--target-dir $tableDestinationDir")
+  
+  case "$destinationType" in
+    "hive")
+      logInfo "Data staging destination: $tableDestinationDir"
+      logInfo "Hive destination: $destinationHiveDB.$activeTable"
+
+      sqoopCommandParams+=("--hive-import")
+      sqoopCommandParams+=("--hive-database $destinationHiveDB")
+      sqoopCommandParams+=("--hive-table $activeTable")
+      sqoopCommandParams+=("--hive-overwrite")
+      sqoopCommandParams+=("--null-string '\\\N'")
+      sqoopCommandParams+=("--null-non-string '\\\N'")
+      sqoopCommandParams+=("--hive-drop-import-delims")
+      ;;
+    "hdfs")
+      logInfo "Data destination: $tableDestinationDir"
+      ;;
+    *)
+      logError "Invalid destination type: $destinationType"
+      errorExit 1
+      ;;
+  esac
 }
 
 buildMapperOptions() {
   sqoopCommandParams+=("--num-mappers 1")
 }
 
-buildHiveOptions() {
-  sqoopCommandParams+=("--hive-import")
-  sqoopCommandParams+=("--hive-database $destinationHiveDB")
-  sqoopCommandParams+=("--hive-table $activeTable")
-  sqoopCommandParams+=("--hive-overwrite")
-  sqoopCommandParams+=("--null-string '\\\N'")
-  sqoopCommandParams+=("--null-non-string '\\\N'")
-  sqoopCommandParams+=("--hive-drop-import-delims")
-}
-
 buildSqoopCommand() {
   sqoopCommandParams=("import")
   #TODO Build according to other options (i.e., do we want to import into Hive or not)
   buildConnectionOptions
-  buildDestinationOptions
   buildMapperOptions
-  buildHiveOptions
+  buildDestinationOptions
   buildImportTypeOptions
 
   sqoopCommand="$( echo "sqoop ${sqoopCommandParams[@]}" )"
@@ -218,11 +229,10 @@ buildSqoopCommand() {
 # Imports table via a dynamic/built Sqoop command
 # importTable
 importActiveTable() {
-  buildSqoopCommand
-
   logInfo "Importing table: $dbName.$dbSchemaName.$activeTable"
-  logInfo "Hive destination: $destinationHiveDB.$activeTable"
-  logInfo "Removing prior staging data in: $tableDestinationDir"
+  buildSqoopCommand
+  
+  logInfo "Prior data in: $tableDestinationDir"
   hadoop fs -rm -f -R "$tableDestinationDir"
   
   logInfo "Running Sqoop command:"
