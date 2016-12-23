@@ -36,7 +36,7 @@ Usage: $currentScript [OPTIONS]
 Available options:
   -c | --configfilename  Name of Sqoop import configuration file to use
   -h | --help            Display usage information
-  -i | --importFileDir   Directory/location of import files (e.g., configuration file, table list)
+  -i | --importfiledir   Directory/location of import files (e.g., configuration file, table list)
   -v | --version         Display version information
 "
 
