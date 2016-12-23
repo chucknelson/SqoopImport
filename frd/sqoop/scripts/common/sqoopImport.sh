@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="0.9"
+VERSION="0.9.1"
 
 # Sqoop Import
 # Imports single or multiple database tables provided by the user.
