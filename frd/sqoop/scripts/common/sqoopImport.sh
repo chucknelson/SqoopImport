@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="0.9.1"
+VERSION="0.9.2"
 
 # Sqoop Import
 # Imports single or multiple database tables provided by the user.
@@ -203,6 +203,8 @@ buildDestinationOptions() {
       ;;
     "hdfs")
       logInfo "Data destination: $tableDestinationDir"
+
+      sqoopCommandParams+=("--optionally-enclosed-by '\\\"'")
       ;;
     *)
       logError "Invalid destination type: $destinationType"
@@ -232,7 +234,7 @@ importActiveTable() {
   logInfo "Importing table: $dbName.$dbSchemaName.$activeTable"
   buildSqoopCommand
   
-  logInfo "Prior data in: $tableDestinationDir"
+  logInfo "Deleting existing import data in: $tableDestinationDir"
   hadoop fs -rm -f -R "$tableDestinationDir"
   
   logInfo "Running Sqoop command:"
