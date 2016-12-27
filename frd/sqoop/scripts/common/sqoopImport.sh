@@ -149,6 +149,9 @@ loadTableList() {
   # Read list of tables into an array we can loop through
   logInfo "Importing from table list: $tableListFileName"
   mapfile -t tableList < "$tableListFileName"
+
+  numTables="${#tableList[@]}"
+  logInfo "Importing $numTables table(s)"
 }
 
 # Options
@@ -218,16 +221,37 @@ buildDestinationOptions() {
 }
 
 buildMapperOptions() {
+  # Number of mappers to use
   if [ -z ${numMappers+x} ]
   then
     logInfo "Number of mappers not specified, using default of $DEFAULT_MAPPERS"
     numMappers=$DEFAULT_MAPPERS
   else
-    logInfo "Using $numMappers mappers"
+    logInfo "Using $numMappers mapper(s)"
   fi
-
   sqoopCommandParams+=("--num-mappers $numMappers")
-  sqoopCommandParams+=("--autoreset-to-one-mapper")
+
+  # How to split data if more than 1 mapper
+  if [[ "$importType" == "query" && "$numMappers" > 1 ]]
+  then
+
+    if [[ "$numTables" > 1 ]]
+    then
+      logError "Query imports with multiple mappers are currently allowed with single table imports only"
+      errorExit 1
+    fi
+      
+    if [ -z ${splitByColumn+x} ]
+    then
+      logError "splitByColumn not found - Query imports with multiple mappers require a split-by column"
+      errorExit 1
+    fi
+    # Query imports must have an explicit split-by column for multiple mappers
+    sqoopCommandParams+=("--split-by $splitByColumn")
+  else
+    # Table import auto-split by primary key, and this option protects against tables with no primary key
+    sqoopCommandParams+=("--autoreset-to-one-mapper")
+  fi
 }
 
 buildCustomOptions() {
