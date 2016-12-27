@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="0.9.2"
+VERSION="0.9.3-beta"
 
 # Sqoop Import
 # Imports single or multiple database tables provided by the user.
@@ -22,6 +22,9 @@ trap - INT TERM EXIT
 ### End Initialize Script
 
 #--------------------
+
+# Constants / Refs
+JDBC_SQLSERVER_STRING="jdbc:sqlserver"
 
 # Defaults
 DEFAULT_CONFIG="sqoop_import.cfg"
@@ -217,6 +220,15 @@ buildMapperOptions() {
   sqoopCommandParams+=("--num-mappers 1")
 }
 
+buildCustomOptions() {
+  sqoopCommandParams+=("--")
+
+  if [[ "$dbConnectionString" =~  "$JDBC_SQLSERVER_STRING" ]]
+  then
+    sqoopCommandParams+=("--schema $dbSchemaName")
+  fi
+}
+
 buildSqoopCommand() {
   sqoopCommandParams=("import")
   #TODO Build according to other options (i.e., do we want to import into Hive or not)
@@ -224,6 +236,9 @@ buildSqoopCommand() {
   buildMapperOptions
   buildDestinationOptions
   buildImportTypeOptions
+
+  # Custom options are always added last
+  buildCustomOptions
 
   sqoopCommand="$( echo "sqoop ${sqoopCommandParams[@]}" )"
 }
