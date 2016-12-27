@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="0.9.3-beta"
+VERSION="0.9.3"
 
 # Sqoop Import
 # Imports single or multiple database tables provided by the user.
@@ -234,7 +234,6 @@ buildMapperOptions() {
   # How to split data if more than 1 mapper
   if [[ "$importType" == "query" && "$numMappers" > 1 ]]
   then
-
     if [[ "$numTables" > 1 ]]
     then
       logError "Query imports with multiple mappers are currently allowed with single table imports only"
