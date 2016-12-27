@@ -29,6 +29,7 @@ JDBC_SQLSERVER_STRING="jdbc:sqlserver"
 # Defaults
 DEFAULT_CONFIG="sqoop_import.cfg"
 DEFAULT_TABLE_LIST="table_list.txt"
+DEFAULT_MAPPERS=1
 
 # Script Info
 USAGE="
@@ -217,7 +218,16 @@ buildDestinationOptions() {
 }
 
 buildMapperOptions() {
-  sqoopCommandParams+=("--num-mappers 1")
+  if [ -z ${numMappers+x} ]
+  then
+    logInfo "Number of mappers not specified, using default of $DEFAULT_MAPPERS"
+    numMappers=$DEFAULT_MAPPERS
+  else
+    logInfo "Using $numMappers mappers"
+  fi
+
+  sqoopCommandParams+=("--num-mappers $numMappers")
+  sqoopCommandParams+=("--autoreset-to-one-mapper")
 }
 
 buildCustomOptions() {
