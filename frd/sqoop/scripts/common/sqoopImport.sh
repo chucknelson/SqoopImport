@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="0.9.3"
+VERSION="0.9.4-wip"
 
 # Sqoop Import
 # Imports single or multiple database tables provided by the user.
@@ -24,6 +24,11 @@ trap - INT TERM EXIT
 #--------------------
 
 # Constants / Refs
+DEST_TYPE_HDFS="hdfs"
+DEST_TYPE_HIVE="hive"
+IMPORT_TYPE_QUERY="query"
+IMPORT_TYPE_TABLE="table"
+JDBC_NETEZZA_STRING="jdbc:netezza"
 JDBC_SQLSERVER_STRING="jdbc:sqlserver"
 
 # Defaults
@@ -170,19 +175,25 @@ loadTableList
 # Command variable: sqoopCommand
 # Command parameters array: sqoopCommandParams
 
+initSqoopCommand() {
+  sqoopCommandParams=("import")
+}
+
 buildImportTypeOptions() {
-  if [[ "$importType" == "table" ]]
-  then
-    sqoopCommandParams+=("--table $activeTable")
-  elif [[ "$importType" == "query" ]]
-  then
-    local parsedQueryString="${queryString/\$TABLE/$activeTable}"
-    parsedQueryString="${parsedQueryString/\$CONDITIONS/\\\$CONDITIONS}"
-    sqoopCommandParams+=("--query \"$parsedQueryString\"")
-  else
-    logError "Invalid import type: $importType"
-    errorExit 1
-  fi
+  case "$importType" in
+    "$IMPORT_TYPE_TABLE")
+      sqoopCommandParams+=("--table $activeTable")
+      ;;
+    "$IMPORT_TYPE_QUERY")
+      local parsedQueryString="${queryString/\$TABLE/$activeTable}"
+      parsedQueryString="${parsedQueryString/\$CONDITIONS/\\\$CONDITIONS}"
+      sqoopCommandParams+=("--query \"$parsedQueryString\"")
+      ;;
+    *)
+      logError "Invalid import type: $importType"
+      errorExit 1
+      ;;
+  esac
 }
 
 buildConnectionOptions() {
@@ -196,10 +207,13 @@ buildDestinationOptions() {
   sqoopCommandParams+=("--target-dir $tableDestinationDir")
   
   case "$destinationType" in
-    "hive")
+    "$DEST_TYPE_HDFS")
+      logInfo "Data destination: $tableDestinationDir"
+      sqoopCommandParams+=("--optionally-enclosed-by '\\\"'")
+      ;;
+    "$DEST_TYPE_HIVE")
       logInfo "Data staging destination: $tableDestinationDir"
       logInfo "Hive destination: $destinationHiveDB.$activeTable"
-
       sqoopCommandParams+=("--hive-import")
       sqoopCommandParams+=("--hive-database $destinationHiveDB")
       sqoopCommandParams+=("--hive-table $activeTable")
@@ -207,11 +221,6 @@ buildDestinationOptions() {
       sqoopCommandParams+=("--null-string '\\\N'")
       sqoopCommandParams+=("--null-non-string '\\\N'")
       sqoopCommandParams+=("--hive-drop-import-delims")
-      ;;
-    "hdfs")
-      logInfo "Data destination: $tableDestinationDir"
-
-      sqoopCommandParams+=("--optionally-enclosed-by '\\\"'")
       ;;
     *)
       logError "Invalid destination type: $destinationType"
@@ -263,8 +272,7 @@ buildCustomOptions() {
 }
 
 buildSqoopCommand() {
-  sqoopCommandParams=("import")
-  #TODO Build according to other options (i.e., do we want to import into Hive or not)
+  initSqoopCommand
   buildConnectionOptions
   buildMapperOptions
   buildDestinationOptions
@@ -276,8 +284,12 @@ buildSqoopCommand() {
   sqoopCommand="$( echo "sqoop ${sqoopCommandParams[@]}" )"
 }
 
+#-----
+
+# Execute Commands
+
 # Imports table via a dynamic/built Sqoop command
-# importTable
+# importActiveTable
 importActiveTable() {
   logInfo "Importing table: $dbName.$dbSchemaName.$activeTable"
   buildSqoopCommand
