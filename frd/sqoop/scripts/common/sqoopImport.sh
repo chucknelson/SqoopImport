@@ -97,7 +97,7 @@ parseOptions() {
 }
 
 setImportFileDir() {
-  if [ -z ${importFileDir+x} ]
+  if [[ ! "$importFileDir" ]]
   then
     logInfo "Import file directory not specified, using current execution directory: $currentPath"
     importFileDir="$currentPath"
@@ -107,7 +107,7 @@ setImportFileDir() {
 }
 
 loadConfig() {
-  if [ -z ${configFileName+x} ]
+  if [[ ! "$configFileName" ]]
   then
     logInfo "Configuration file not specified, attempting to use default of $DEFAULT_CONFIG"
     configFileName="$DEFAULT_CONFIG"
@@ -128,7 +128,7 @@ loadConfig() {
 
 loadTableList() {
   # Check for individual table
-  if [ -z ${tableName+x} ]
+  if [[ ! "$tableName" ]]
   then
     logInfo "Individual table not specified, attempting to use table list"
   else
@@ -137,7 +137,7 @@ loadTableList() {
     return 0
   fi
 
-  if [ -z ${tableListFileName+x} ]
+  if [[ ! "$tableListFileName" ]]
   then
     logInfo "Table list file not specified, attempting to use default of $DEFAULT_TABLE_LIST"
     tableListFileName="$DEFAULT_TABLE_LIST"
@@ -231,7 +231,7 @@ buildDestinationOptions() {
 
 buildMapperOptions() {
   # Number of mappers to use
-  if [ -z ${numMappers+x} ]
+  if [[ ! "$numMappers" ]]
   then
     logInfo "Number of mappers not specified, using default of $DEFAULT_MAPPERS"
     numMappers=$DEFAULT_MAPPERS
@@ -249,7 +249,7 @@ buildMapperOptions() {
       errorExit 1
     fi
       
-    if [ -z ${splitByColumn+x} ]
+    if [[ ! "$splitByColumn" ]]
     then
       logError "splitByColumn not found - Query imports with multiple mappers require a split-by column"
       errorExit 1
