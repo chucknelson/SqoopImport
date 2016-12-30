@@ -268,33 +268,23 @@ buildMapperOptions() {
   else
     logInfo "Using $numMappers mapper(s)"
   fi
+  
   addSqoopParameter "--num-mappers" "$numMappers"
 
   # How to split data if more than 1 mapper
-  if [[ "$importType" == "$IMPORT_TYPE_QUERY" && "$numMappers" > 1 ]]
+  if [[ ! ${splitByColumn+x} || ! "$splitByColumn" ]]
   then
-    if [[ "$numTables" > 1 ]]
+    if [[ "$importType" != "$IMPORT_TYPE_JOB" ]]
     then
-      logError "Query imports with multiple mappers are currently allowed with single table imports only"
-      errorExit 1
+      # Table imports without "split-by" auto-split by primary key, and this option protects against tables with no primary key
+      addEmptySqoopParameter "--autoreset-to-one-mapper"
     fi
-      
-    if [[ ! "$splitByColumn" ]]
-    then
-      logError "splitByColumn not found - Query imports with multiple mappers require a split-by column"
-      errorExit 1
-    fi
-    # Query imports must have an explicit split-by column for multiple mappers
-    addSqoopParameter "--split-by" "$splitByColumn"
-  elif [[ "$importType" != "$IMPORT_TYPE_JOB" ]]
-  then
-    # Table imports auto-split by primary key, and this option protects against tables with no primary key
-    addEmptySqoopParameter "--autoreset-to-one-mapper"
+  else
+    addSqoopParameter "--split-by" "$splitByColumn"  
   fi
 }
 
 buildDestinationOptions() {
-  
   addSqoopParameter "--target-dir" "$tableDestinationDir"
   
   if [[ "$destinationType" ]]
@@ -351,14 +341,22 @@ buildSqoopCommand() {
 # Execute Commands
 
 deleteOldData() {
-  logInfo "Deleting existing import data in: $tableDestinationDir"
-  hadoop fs -rm -f -R "$tableDestinationDir"
+  if [[ ! ${destinationDirOverwrite+x} || ! "$destinationDirOverwrite" || "$destinationDirOverwrite" != "true" ]]
+  then
+    logInfo "Overwriting of data disabled or not specified, data will not be overwritten"
+  else
+    logInfo "Overwrite of data enabled"
+    logInfo "Deleting existing data in: $tableDestinationDir"
+    hadoop fs -rm -f -R "$tableDestinationDir"
+  fi
 }
 
 executeSqoopCommand() {
   buildSqoopCommand
   logInfo "Executing Sqoop command:"
   echo "$sqoopCommand"
+  
+  deleteOldData
   eval "$sqoopCommand"
 }
 
@@ -371,9 +369,6 @@ executeSqoopJob() {
 # importActiveTable
 importActiveTable() {
   logInfo "Importing table: $dbName.$dbSchemaName.$activeTable"
-    
-  
-  
   executeSqoopCommand
 }
 
