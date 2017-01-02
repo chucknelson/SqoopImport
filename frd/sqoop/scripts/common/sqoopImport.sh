@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 VERSION="0.9.4-wip"
+sqoopImportVersion="$VERSION" # to avoid possible conflicts
 
 # Sqoop Import
 # Imports single or multiple database tables provided by the user.
@@ -52,7 +53,7 @@ Available options:
 
 # Script arguments / config
 showVersionInfo() {
-  logInfo "$currentScript ($VERSION)"
+  logInfo "$currentScript (v$sqoopImportVersion)"
 }
 
 showUsageInfo() {
