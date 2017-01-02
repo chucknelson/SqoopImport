@@ -5,7 +5,7 @@
 
 # Standard logging functions
 log () {
-  echo -e "$( date '+%Y/%m/%d %r' )$1"
+  echo -e "$helperOutputPrefix$1"
 }
 
 logInfo () {

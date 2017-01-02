@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+VERSION="0.9"
 
 ### Script Safety
 # Exit script if any variable is not set
@@ -10,19 +11,20 @@ set -o errexit
 # Pass along exit code if ANY command in a piped command fails (not just the last one)
 set -o pipefail
 
-currentTimestamp="$( date '+%Y/%m/%d %r' )"
-echo "$currentTimestamp - Initializing script $1"
-
 ### Bash script helpers
-# Initialize all helpers 
 
+helperVersion="$VERSION"
+helperOutputPrefix="$( date '+%Y/%m/%d %r' )"
+echo "$helperOutputPrefix - Initializing script $1"
+
+# Initialize all helpers 
 helperPath="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-echo "$currentTimestamp - Initializing helpers"
+echo "$helperOutputPrefix - Initializing bash helpers (v$helperVersion)"
 
 for helper in "$helperPath"/*Helper.sh; do
-  echo "$currentTimestamp - Initialized $helper"
+  echo "$helperOutputPrefix - Initialized $helper"
   source "$helper"
 done
 
-echo "$currentTimestamp - Initialization complete"
+echo "$helperOutputPrefix - Initialization complete"
