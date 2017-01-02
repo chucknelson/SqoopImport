@@ -182,11 +182,12 @@ fi
 
 addEmptySqoopParameter() {
   local parameter="$1"
+  logInfo "Adding parameter: $parameter"
   sqoopCommandParams+=("$parameter")
 }
 
 # Add Sqoop parameter if value exists
-# This allows us to interpret/continue processing with blank config values
+# This allows us to interpret/continue processing with missing or blank config values
 # addSqoopParameter [parameter] [value]
 addSqoopParameter() {
   local parameter="$1"
@@ -196,14 +197,17 @@ addSqoopParameter() {
   local valueToCheck="$(sed -e 's/^"//' -e 's/"$//' <<<"$value")"
 
   if [[ "$parameter" && "$valueToCheck" ]]
-  then
-    logInfo "Adding parameter: $parameter --> $value"
+  then  
+    local paramString="$parameter $value"
     if [[ "$parameter" =~ "Dhadoop" ]]
     then
       # Generic parameters use "=" syntax
-      sqoopCommandParams+=("$parameter=$value")
+      paramString="$parameter=$value"
+      logInfo "Adding parameter: $paramString"
+      sqoopCommandParams+=("$paramString")
     else
-      sqoopCommandParams+=("$parameter $value")
+      logInfo "Adding parameter: $paramString"
+      sqoopCommandParams+=("$paramString")
     fi
   fi
 }
@@ -239,7 +243,7 @@ buildImportTypeOptions() {
     "$IMPORT_TYPE_QUERY")
       local parsedQueryString="${queryString/\$TABLE/$activeTable}"
       parsedQueryString="${parsedQueryString/\$CONDITIONS/\\\$CONDITIONS}"
-      addSqoopParameter "--query \"$parsedQueryString\""
+      addSqoopParameter "--query" "\"$parsedQueryString\""
       ;;
     *)
       logError "Invalid import type: $importType"
@@ -323,16 +327,20 @@ buildCustomOptions() {
 }
 
 buildSqoopCommand() {
+  # Temporarily allow unset variables - some config values can be missing
+  set +u
+
   initSqoopCommand
   buildGenericOptions
   buildImportTypeOptions
   buildConnectionOptions
   buildMapperOptions
   buildDestinationOptions
-
   # Custom options are always added last
   buildCustomOptions
 
+  # Restore error setting for unset variables
+  set -u
   sqoopCommand="$( echo "sqoop ${sqoopCommandParams[@]}" )"
 }
 
@@ -341,7 +349,7 @@ buildSqoopCommand() {
 # Execute Commands
 
 deleteOldData() {
-  if [[ ! ${destinationDirOverwrite+x} || ! "$destinationDirOverwrite" || "$destinationDirOverwrite" != "true" ]]
+  if [[ ! ${destinationDirOverwrite+x} || "$destinationDirOverwrite" != "true" ]]
   then
     logInfo "Overwriting of data disabled or not specified, data will not be overwritten"
   else
