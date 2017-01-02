@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 VERSION="0.9"
+helperVersion="$VERSION" # to avoid possible conflicts
 
 ### Script Safety
 # Exit script if any variable is not set
@@ -13,11 +14,10 @@ set -o pipefail
 
 ### Bash script helpers
 
-if [[ ${helperVersion+x} ]]
+if [[ ${helperOutputPrefix+x} ]]
 then
   logInfo "bash helpers (v$helperVersion) already loaded"
 else
-  helperVersion="$VERSION"
   helperOutputPrefix="$( date '+%Y/%m/%d %r' )"
   echo "$helperOutputPrefix - Initializing script $1"
 
