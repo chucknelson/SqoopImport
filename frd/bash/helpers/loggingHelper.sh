@@ -13,7 +13,7 @@ logInfo () {
 }
 
 logError () {
-  log " - ERROR: $1"
+  >&2 log " - ERROR: $1"
 }
 
 logHeader () {
