@@ -274,7 +274,7 @@ buildConnectionOptions() {
 
 buildMapperOptions() {
   # Number of mappers to use
-  if varIsAvailable numMappers
+  if ! varIsAvailable numMappers
   then
     if [[ "$importType" == "$IMPORT_TYPE_JOB" ]]
     then
@@ -283,10 +283,9 @@ buildMapperOptions() {
       logInfo "Number of mappers not specified for import, using default of $DEFAULT_MAPPERS"
       numMappers=$DEFAULT_MAPPERS
     fi
-  else
-    logInfo "Using $numMappers mapper(s)"
   fi
   
+  logInfo "Using $numMappers mapper(s)"
   addSqoopParameter "--num-mappers" "$numMappers"
 
   # How to split data if more than 1 mapper
@@ -439,8 +438,13 @@ executeSqoopCommand() {
   echo "$sqoopCommand"
   
   prepareStaging
-  eval "$sqoopCommand"
-  moveStaging
+  
+  if eval "$sqoopCommand"
+  then
+    moveStaging
+  else
+    return 1
+  fi
 }
 
 executeSqoopJob() {
