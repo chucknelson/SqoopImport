@@ -187,7 +187,13 @@ varIsAvailable() {
 }
 
 stagingEnabled() {
-  varIsAvailable stagingDir
+  if [[ "$destinationType" == "$DEST_TYPE_HIVE" ]]
+  then
+    logInfo "Staging occurs automatically with Hive imports, ignoring staging settings"
+    return 1
+  else
+    varIsAvailable stagingDir
+  fi
 }
 
 overwriteEnabled() {
@@ -317,7 +323,7 @@ buildDestinationOptions() {
         addSqoopParameter "--optionally-enclosed-by" "'\\\"'"
         ;;
       "$DEST_TYPE_HIVE")
-        logInfo "Data staging destination: $tableDestinationDir"
+        logInfo "Hive data staging destination: $tableDestinationDir"
         logInfo "Hive destination: $destinationHiveDB.$activeTable"
         addEmptySqoopParameter "--hive-import"
         addSqoopParameter "--hive-database" "$destinationHiveDB"
