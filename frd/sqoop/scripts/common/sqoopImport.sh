@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="0.9.4-wip"
+VERSION="1.0.0-wip"
 sqoopImportVersion="$VERSION" # to avoid possible conflicts
 
 # Sqoop Import
@@ -181,6 +181,19 @@ fi
 # Command variable: sqoopCommand
 # Command parameters array: sqoopCommandParams
 
+varIsAvailable() {
+  local var="$1"
+  [[ ${!var+x} && ${!var} ]]
+}
+
+stagingEnabled() {
+  varIsAvailable stagingDir
+}
+
+overwriteEnabled() {
+  varIsAvailable destinationDirOverwrite && [[ "$destinationDirOverwrite" == "true" ]]
+}
+
 addEmptySqoopParameter() {
   local parameter="$1"
   logInfo "Adding parameter: $parameter"
@@ -261,7 +274,7 @@ buildConnectionOptions() {
 
 buildMapperOptions() {
   # Number of mappers to use
-  if [[ ! ${numMappers+x} || ! "$numMappers" ]]
+  if varIsAvailable numMappers
   then
     if [[ "$importType" == "$IMPORT_TYPE_JOB" ]]
     then
@@ -277,7 +290,7 @@ buildMapperOptions() {
   addSqoopParameter "--num-mappers" "$numMappers"
 
   # How to split data if more than 1 mapper
-  if [[ ! ${splitByColumn+x} || ! "$splitByColumn" ]]
+  if varIsAvailable splitByColumn
   then
     if [[ "$importType" != "$IMPORT_TYPE_JOB" ]]
     then
@@ -290,7 +303,12 @@ buildMapperOptions() {
 }
 
 buildDestinationOptions() {
-  addSqoopParameter "--target-dir" "$tableDestinationDir"
+  if stagingEnabled
+  then
+    addSqoopParameter "--target-dir" "$tableStagingDir"  
+  else
+    addSqoopParameter "--target-dir" "$tableDestinationDir"  
+  fi
   
   if [[ "$destinationType" ]]
   then
@@ -348,15 +366,70 @@ buildSqoopCommand() {
 #-----
 
 # Execute Commands
+deleteHDFSLocation() {
+  local location="$1"
 
-deleteOldData() {
-  if [[ ! ${destinationDirOverwrite+x} || "$destinationDirOverwrite" != "true" ]]
+  if overwriteEnabled
   then
-    logInfo "Overwriting of data disabled or not specified, data will not be overwritten"
+    logInfo "Overwrite of data destination enabled"
+    logInfo "Deleting existing data in: $location"
+    hadoop fs -rm -f -R "$location"
   else
-    logInfo "Overwrite of data enabled"
-    logInfo "Deleting existing data in: $tableDestinationDir"
-    hadoop fs -rm -f -R "$tableDestinationDir"
+    logInfo "Overwriting of data destination disabled or not specified, $location will not be overwritten"
+  fi
+}
+
+copyHDFSLocation() {
+  local origin="$1"
+  local destination="$2"
+
+  logInfo "Copying $origin  =to=>  $destination"
+  hadoop distcp "$origin" "$destination"
+}
+
+#TODO - Refactor?
+setActiveHDFSLocations() {
+  if stagingEnabled
+  then
+    if [[ "$importType" == "$IMPORT_TYPE_JOB" ]]
+    then
+      tableStagingDir="$stagingDir"
+    else
+      tableStagingDir="$stagingDir"/"$activeTable"
+    fi
+  fi
+
+  if [[ "$importType" == "$IMPORT_TYPE_JOB" ]]
+  then
+    tableDestinationDir="$destinationDir"
+  else
+    tableDestinationDir="$destinationDir"/"$activeTable"
+  fi
+}
+
+prepareDestination() {
+  deleteHDFSLocation "$tableDestinationDir"
+}
+
+prepareStaging() {
+  if stagingEnabled
+  then
+    logInfo "Staging import data in: $tableStagingDir"
+    deleteHDFSLocation "$tableStagingDir"
+  else
+    logInfo "Staging directory not specified, data will be imported directly to the destination"
+    prepareDestination
+  fi
+}
+
+moveStaging() {
+  if stagingEnabled
+  then
+    logInfo "Moving staging data to destination"
+    prepareDestination
+    copyHDFSLocation "$tableStagingDir" "$tableDestinationDir"
+  else
+    logInfo "Staging directory not specified, data was imported directly to the destination"
   fi
 }
 
@@ -365,8 +438,9 @@ executeSqoopCommand() {
   logInfo "Executing Sqoop command:"
   echo "$sqoopCommand"
   
-  deleteOldData
+  prepareStaging
   eval "$sqoopCommand"
+  moveStaging
 }
 
 executeSqoopJob() {
@@ -383,13 +457,13 @@ importActiveTable() {
 
 if [[ "$importType" == "$IMPORT_TYPE_JOB" ]]
 then
-  tableDestinationDir="$destinationDir"
+  setActiveHDFSLocations
   try executeSqoopJob
   logInfo "Job $jobName complete - RC: $RC"
 else
   for table in "${tableList[@]}"; do
     activeTable="$table"
-    tableDestinationDir="$destinationDir"/"$activeTable"
+    setActiveHDFSLocations
 
     try importActiveTable
     logInfo "Import complete for table: $dbName.$dbSchemaName.$activeTable - RC: $RC"
