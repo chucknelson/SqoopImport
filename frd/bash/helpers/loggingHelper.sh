@@ -5,7 +5,7 @@
 
 # Standard logging functions
 log () {
-  echo -e "$helperOutputPrefix$1"
+  echoWithPrefix "$1"
 }
 
 logInfo () {

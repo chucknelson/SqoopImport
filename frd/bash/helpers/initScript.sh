@@ -14,22 +14,26 @@ set -o pipefail
 
 ### Bash script helpers
 
+echoWithPrefix() {
+  local helperOutputPrefix="date '+%Y/%m/%d %r'"
+  echo -e "$( eval $helperOutputPrefix )$1"
+}
+
 if [[ ${helperOutputPrefix+x} ]]
 then
-  logInfo "bash helpers (v$helperVersion) already loaded"
+  echoWithPrefix "bash helpers (v$helperVersion) already loaded"
 else
-  helperOutputPrefix="$( date '+%Y/%m/%d %r' )"
-  echo "$helperOutputPrefix - Initializing script $1"
+  echoWithPrefix " - Initializing script $1"
 
   # Initialize all helpers 
   helperPath="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-  echo "$helperOutputPrefix - Initializing bash helpers (v$helperVersion)"
+  echoWithPrefix " - Initializing bash helpers (v$helperVersion)"
 
   for helper in "$helperPath"/*Helper.sh; do
-    echo "$helperOutputPrefix - Initialized $helper"
+    echoWithPrefix " - Initialized $helper"
     source "$helper"
   done
 
-  echo "$helperOutputPrefix - Initialization complete"  
+  echoWithPrefix " - Initialization complete"  
 fi
