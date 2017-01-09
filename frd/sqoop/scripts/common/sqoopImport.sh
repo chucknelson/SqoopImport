@@ -187,7 +187,7 @@ varIsAvailable() {
 }
 
 stagingEnabled() {
-  if [[ "$destinationType" == "$DEST_TYPE_HIVE" ]]
+  if varIsAvailable destinationType && [[ "$destinationType" == "$DEST_TYPE_HIVE" ]]
   then
     logInfo "Staging occurs automatically with Hive imports, ignoring staging settings"
     return 1
