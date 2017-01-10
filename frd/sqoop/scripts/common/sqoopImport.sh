@@ -373,10 +373,23 @@ buildSqoopCommand() {
 # Execute Commands
 deleteHDFSLocation() {
   local location="$1"
-
-  if overwriteEnabled
+  
+  local forceDelete=""
+  if [[ ${2+x} ]]
   then
-    logInfo "Overwrite of data destination enabled"
+    forceDelete="$2"
+  fi
+
+  if overwriteEnabled || [[ "$forceDelete" == "force" ]]
+  then
+    if overwriteEnabled
+    then
+      logInfo "Overwrite of data destination enabled" 
+    elif [[ "$forceDelete" == "force" ]]
+    then
+      logInfo "Deletion explicitly forced"
+    fi
+
     logInfo "Deleting existing data in: $location"
     hadoop fs -rm -f -R "$location"
   else
@@ -389,7 +402,7 @@ copyHDFSLocation() {
   local destination="$2"
 
   logInfo "Copying $origin  =to=>  $destination"
-  hadoop distcp "$origin" "$destination"
+  hadoop distcp -strategy dynamic "$origin" "$destination"
 }
 
 #TODO - Refactor?
@@ -431,7 +444,7 @@ moveStaging() {
   if stagingEnabled
   then
     logInfo "Moving staging data to destination"
-    prepareDestination
+    deleteHDFSLocation "$tableDestinationDir" "force"
     copyHDFSLocation "$tableStagingDir" "$tableDestinationDir"
   else
     logInfo "Staging directory not specified, data was imported directly to the destination"
