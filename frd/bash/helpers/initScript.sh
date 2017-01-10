@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-VERSION="0.9.1"
-helperVersion="$VERSION" # to avoid possible conflicts
+VERSION="0.9.2-wip"
 
 ### Script Safety
 # Exit script if any variable is not set
@@ -14,26 +13,48 @@ set -o pipefail
 
 ### Bash script helpers
 
+helperVerboseOn() {
+  export BASH_HELPER_VERBOSE=1
+}
+
+helperVerboseOff() {
+  export BASH_HELPER_VERBOSE=0
+}
+
+helperVerboseEnabled() {
+  [[ ${BASH_HELPER_VERBOSE+x} && "$BASH_HELPER_VERBOSE" > 0 ]]
+}
+
+# "Global" echo function
 echoWithPrefix() {
   local helperOutputPrefix="date '+%Y/%m/%d %r'"
   echo -e "$( eval $helperOutputPrefix )$1"
 }
 
-if [[ ${helperOutputPrefix+x} ]]
+# Echo function for verbose mode
+echoVerbose() {
+  if helperVerboseEnabled
+  then
+    echoWithPrefix "$1"
+  fi
+}
+
+if [[ ${helperVersion+x} ]]
 then
-  echoWithPrefix "bash helpers (v$helperVersion) already loaded"
+  echoVerbose " - bash helpers (v$helperVersion) already loaded"
 else
-  echoWithPrefix " - Initializing script $1"
+  echoVerbose " - Initializing script $1"
+
+  helperVersion="$VERSION" # to avoid possible conflicts
+  echoVerbose " - Initializing bash helpers (v$helperVersion)"
 
   # Initialize all helpers 
   helperPath="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-  echoWithPrefix " - Initializing bash helpers (v$helperVersion)"
-
   for helper in "$helperPath"/*Helper.sh; do
-    echoWithPrefix " - Initialized $helper"
+    echoVerbose " - Initialized $helper"
     source "$helper"
   done
 
-  echoWithPrefix " - Initialization complete"  
+  echoVerbose " - Initialization complete"  
 fi
