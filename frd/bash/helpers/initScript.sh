@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="0.9.2-wip"
+VERSION="0.9.2"
 
 ### Script Safety
 # Exit script if any variable is not set
