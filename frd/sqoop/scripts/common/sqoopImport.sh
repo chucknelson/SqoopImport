@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="1.0.0"
+VERSION="1.0.1-wip"
 sqoopImportVersion="$VERSION" # to avoid possible conflicts
 
 # Sqoop Import
@@ -295,7 +295,7 @@ buildMapperOptions() {
   addSqoopParameter "--num-mappers" "$numMappers"
 
   # How to split data if more than 1 mapper
-  if varIsAvailable splitByColumn
+  if ! varIsAvailable splitByColumn
   then
     if [[ "$importType" != "$IMPORT_TYPE_JOB" ]]
     then
