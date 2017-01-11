@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="1.0.1-wip"
+VERSION="1.0.1"
 sqoopImportVersion="$VERSION" # to avoid possible conflicts
 
 # Sqoop Import
