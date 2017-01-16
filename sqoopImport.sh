@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-VERSION="0.9.3"
+VERSION="1.0.1"
+sqoopImportVersion="$VERSION" # to avoid possible conflicts
 
 # Sqoop Import
 # Imports single or multiple database tables provided by the user.
@@ -24,6 +25,12 @@ trap - INT TERM EXIT
 #--------------------
 
 # Constants / Refs
+DEST_TYPE_HDFS="hdfs"
+DEST_TYPE_HIVE="hive"
+IMPORT_TYPE_JOB="job"
+IMPORT_TYPE_QUERY="query"
+IMPORT_TYPE_TABLE="table"
+JDBC_NETEZZA_STRING="jdbc:netezza"
 JDBC_SQLSERVER_STRING="jdbc:sqlserver"
 
 # Defaults
@@ -46,7 +53,7 @@ Available options:
 
 # Script arguments / config
 showVersionInfo() {
-  logInfo "$currentScript ($VERSION)"
+  logInfo "$currentScript (v$sqoopImportVersion)"
 }
 
 showUsageInfo() {
@@ -92,7 +99,7 @@ parseOptions() {
 }
 
 setImportFileDir() {
-  if [ -z ${importFileDir+x} ]
+  if [[ ! ${importFileDir+x} || ! "$importFileDir" ]]
   then
     logInfo "Import file directory not specified, using current execution directory: $currentPath"
     importFileDir="$currentPath"
@@ -102,7 +109,7 @@ setImportFileDir() {
 }
 
 loadConfig() {
-  if [ -z ${configFileName+x} ]
+  if [[ ! ${configFileName+x} || ! "$configFileName" ]]
   then
     logInfo "Configuration file not specified, attempting to use default of $DEFAULT_CONFIG"
     configFileName="$DEFAULT_CONFIG"
@@ -123,7 +130,7 @@ loadConfig() {
 
 loadTableList() {
   # Check for individual table
-  if [ -z ${tableName+x} ]
+  if [[ ! ${tableName+x} ||  ! "$tableName" ]]
   then
     logInfo "Individual table not specified, attempting to use table list"
   else
@@ -132,7 +139,7 @@ loadTableList() {
     return 0
   fi
 
-  if [ -z ${tableListFileName+x} ]
+  if [[ ! ${tableListFileName+x} || ! "$tableListFileName" ]]
   then
     logInfo "Table list file not specified, attempting to use default of $DEFAULT_TABLE_LIST"
     tableListFileName="$DEFAULT_TABLE_LIST"
@@ -161,7 +168,11 @@ parseOptions "$@"
 showVersionInfo
 setImportFileDir
 loadConfig
-loadTableList
+
+if [[ "$importType" != "$IMPORT_TYPE_JOB" ]]
+then
+  loadTableList
+fi
 
 #-----
 
@@ -170,133 +181,317 @@ loadTableList
 # Command variable: sqoopCommand
 # Command parameters array: sqoopCommandParams
 
-buildImportTypeOptions() {
-  if [[ "$importType" == "table" ]]
+varIsAvailable() {
+  local var="$1"
+  [[ ${!var+x} && ${!var} ]]
+}
+
+stagingEnabled() {
+  if varIsAvailable destinationType && [[ "$destinationType" == "$DEST_TYPE_HIVE" ]]
   then
-    sqoopCommandParams+=("--table $activeTable")
-  elif [[ "$importType" == "query" ]]
-  then
-    local parsedQueryString="${queryString/\$TABLE/$activeTable}"
-    parsedQueryString="${parsedQueryString/\$CONDITIONS/\\\$CONDITIONS}"
-    sqoopCommandParams+=("--query \"$parsedQueryString\"")
+    logInfo "Staging occurs automatically with Hive imports, ignoring staging settings"
+    return 1
   else
-    logError "Invalid import type: $importType"
-    errorExit 1
+    varIsAvailable stagingDir
   fi
 }
 
-buildConnectionOptions() {
-  sqoopCommandParams+=("-Dhadoop.security.credential.provider.path=$hadoopCredentialPath")
-  sqoopCommandParams+=("--connect \"$dbConnectionString\"")
-  sqoopCommandParams+=("--username $dbUserName")
-  sqoopCommandParams+=("--password-alias $dbCredentialName")
+overwriteEnabled() {
+  varIsAvailable destinationDirOverwrite && [[ "$destinationDirOverwrite" == "true" ]]
 }
 
-buildDestinationOptions() {
-  sqoopCommandParams+=("--target-dir $tableDestinationDir")
-  
-  case "$destinationType" in
-    "hive")
-      logInfo "Data staging destination: $tableDestinationDir"
-      logInfo "Hive destination: $destinationHiveDB.$activeTable"
+addEmptySqoopParameter() {
+  local parameter="$1"
+  logInfo "Adding parameter: $parameter"
+  sqoopCommandParams+=("$parameter")
+}
 
-      sqoopCommandParams+=("--hive-import")
-      sqoopCommandParams+=("--hive-database $destinationHiveDB")
-      sqoopCommandParams+=("--hive-table $activeTable")
-      sqoopCommandParams+=("--hive-overwrite")
-      sqoopCommandParams+=("--null-string '\\\N'")
-      sqoopCommandParams+=("--null-non-string '\\\N'")
-      sqoopCommandParams+=("--hive-drop-import-delims")
+# Add Sqoop parameter if value exists
+# This allows us to interpret/continue processing with missing or blank config values
+# addSqoopParameter [parameter] [value]
+addSqoopParameter() {
+  local parameter="$1"
+  local value="$2"
+
+  # Strip quotes on value for checking existence (could just be empty quotes)
+  local valueToCheck="$(sed -e 's/^"//' -e 's/"$//' <<<"$value")"
+
+  if [[ "$parameter" && "$valueToCheck" ]]
+  then  
+    local paramString="$parameter $value"
+    if [[ "$parameter" =~ "Dhadoop" ]]
+    then
+      # Generic parameters use "=" syntax
+      paramString="$parameter=$value"
+      logInfo "Adding parameter: $paramString"
+      sqoopCommandParams+=("$paramString")
+    else
+      logInfo "Adding parameter: $paramString"
+      sqoopCommandParams+=("$paramString")
+    fi
+  fi
+}
+
+initSqoopCommand() {
+  case "$importType" in
+    "$IMPORT_TYPE_JOB")
+      sqoopCommandParams=("job")
       ;;
-    "hdfs")
-      logInfo "Data destination: $tableDestinationDir"
-
-      sqoopCommandParams+=("--optionally-enclosed-by '\\\"'")
+    "$IMPORT_TYPE_QUERY"|"$IMPORT_TYPE_TABLE")
+      sqoopCommandParams=("import")
       ;;
     *)
-      logError "Invalid destination type: $destinationType"
+      logError "Invalid import type: $importType"
+      errorExit 1
+      ;;
+  esac 
+}
+
+buildGenericOptions() {
+  addSqoopParameter "-Dhadoop.security.credential.provider.path" "$hadoopCredentialPath"
+}
+
+buildImportTypeOptions() {
+  case "$importType" in
+    "$IMPORT_TYPE_JOB")
+      addSqoopParameter "--exec" "$jobName"
+      addEmptySqoopParameter "--"  # to prepare for any overriding options in config
+      ;;
+    "$IMPORT_TYPE_TABLE")
+      addSqoopParameter "--table" "$activeTable"
+      ;;
+    "$IMPORT_TYPE_QUERY")
+      local parsedQueryString="${queryString/\$TABLE/$activeTable}"
+      parsedQueryString="${parsedQueryString/\$CONDITIONS/\\\$CONDITIONS}"
+      addSqoopParameter "--query" "\"$parsedQueryString\""
+      ;;
+    *)
+      logError "Invalid import type: $importType"
       errorExit 1
       ;;
   esac
 }
 
+buildConnectionOptions() {
+  addSqoopParameter "--connect" "\"$dbConnectionString\""
+  addSqoopParameter "--username" "$dbUserName"
+  addSqoopParameter "--password-alias" "$dbCredentialName"
+}
+
 buildMapperOptions() {
   # Number of mappers to use
-  if [ -z ${numMappers+x} ]
+  if ! varIsAvailable numMappers
   then
-    logInfo "Number of mappers not specified, using default of $DEFAULT_MAPPERS"
-    numMappers=$DEFAULT_MAPPERS
-  else
-    logInfo "Using $numMappers mapper(s)"
+    if [[ "$importType" == "$IMPORT_TYPE_JOB" ]]
+    then
+      logInfo "Number of mappers not specified for job, using job's default"
+    else
+      logInfo "Number of mappers not specified for import, using default of $DEFAULT_MAPPERS"
+      numMappers=$DEFAULT_MAPPERS
+    fi
   fi
-  sqoopCommandParams+=("--num-mappers $numMappers")
+  
+  logInfo "Using $numMappers mapper(s)"
+  addSqoopParameter "--num-mappers" "$numMappers"
 
   # How to split data if more than 1 mapper
-  if [[ "$importType" == "query" && "$numMappers" > 1 ]]
+  if ! varIsAvailable splitByColumn
   then
-    if [[ "$numTables" > 1 ]]
+    if [[ "$importType" != "$IMPORT_TYPE_JOB" ]]
     then
-      logError "Query imports with multiple mappers are currently allowed with single table imports only"
-      errorExit 1
+      # Table imports without "split-by" auto-split by primary key, and this option protects against tables with no primary key
+      addEmptySqoopParameter "--autoreset-to-one-mapper"
     fi
-      
-    if [ -z ${splitByColumn+x} ]
-    then
-      logError "splitByColumn not found - Query imports with multiple mappers require a split-by column"
-      errorExit 1
-    fi
-    # Query imports must have an explicit split-by column for multiple mappers
-    sqoopCommandParams+=("--split-by $splitByColumn")
   else
-    # Table import auto-split by primary key, and this option protects against tables with no primary key
-    sqoopCommandParams+=("--autoreset-to-one-mapper")
+    addSqoopParameter "--split-by" "$splitByColumn"  
+  fi
+}
+
+buildDestinationOptions() {
+  if stagingEnabled
+  then
+    addSqoopParameter "--target-dir" "$tableStagingDir"  
+  else
+    addSqoopParameter "--target-dir" "$tableDestinationDir"  
+  fi
+  
+  if [[ "$destinationType" ]]
+  then
+    case "$destinationType" in
+      "$DEST_TYPE_HDFS")
+        logInfo "Data destination: $tableDestinationDir"
+        addSqoopParameter "--optionally-enclosed-by" "'\\\"'"
+        ;;
+      "$DEST_TYPE_HIVE")
+        logInfo "Hive data staging destination: $tableDestinationDir"
+        logInfo "Hive destination: $destinationHiveDB.$activeTable"
+        addEmptySqoopParameter "--hive-import"
+        addSqoopParameter "--hive-database" "$destinationHiveDB"
+        addSqoopParameter "--hive-table" "$activeTable"
+        addEmptySqoopParameter "--hive-overwrite"
+        addSqoopParameter "--null-string" "'\\\N'"
+        addSqoopParameter "--null-non-string" "'\\\N'"
+        addEmptySqoopParameter "--hive-drop-import-delims"
+        ;;
+      *)
+        logError "Invalid destination type: $destinationType"
+        errorExit 1
+        ;;
+    esac
   fi
 }
 
 buildCustomOptions() {
-  sqoopCommandParams+=("--")
+  addEmptySqoopParameter "--"
 
   if [[ "$dbConnectionString" =~  "$JDBC_SQLSERVER_STRING" ]]
   then
-    sqoopCommandParams+=("--schema $dbSchemaName")
+    addSqoopParameter "--schema" "$dbSchemaName"
   fi
 }
 
 buildSqoopCommand() {
-  sqoopCommandParams=("import")
-  #TODO Build according to other options (i.e., do we want to import into Hive or not)
+  # Temporarily allow unset variables - some config values can be missing
+  set +u
+
+  initSqoopCommand
+  buildGenericOptions
+  buildImportTypeOptions
   buildConnectionOptions
   buildMapperOptions
   buildDestinationOptions
-  buildImportTypeOptions
-
   # Custom options are always added last
   buildCustomOptions
 
+  # Restore error setting for unset variables
+  set -u
   sqoopCommand="$( echo "sqoop ${sqoopCommandParams[@]}" )"
 }
 
-# Imports table via a dynamic/built Sqoop command
-# importTable
-importActiveTable() {
-  logInfo "Importing table: $dbName.$dbSchemaName.$activeTable"
-  buildSqoopCommand
+#-----
+
+# Execute Commands
+deleteHDFSLocation() {
+  local location="$1"
   
-  logInfo "Deleting existing import data in: $tableDestinationDir"
-  hadoop fs -rm -f -R "$tableDestinationDir"
-  
-  logInfo "Running Sqoop command:"
-  echo "$sqoopCommand"
-  eval "$sqoopCommand"
+  local forceDelete=""
+  if [[ ${2+x} ]]
+  then
+    forceDelete="$2"
+  fi
+
+  if overwriteEnabled || [[ "$forceDelete" == "force" ]]
+  then
+    if overwriteEnabled
+    then
+      logInfo "Overwrite of data destination enabled" 
+    elif [[ "$forceDelete" == "force" ]]
+    then
+      logInfo "Deletion explicitly forced"
+    fi
+
+    logInfo "Deleting existing data in: $location"
+    hadoop fs -rm -f -R "$location"
+  else
+    logInfo "Overwriting of data destination disabled or not specified, $location will not be overwritten"
+  fi
 }
 
-for table in "${tableList[@]}"; do
-  activeTable="$table"
-  tableDestinationDir="$destinationDir"/"$activeTable"
+copyHDFSLocation() {
+  local origin="$1"
+  local destination="$2"
 
-  try importActiveTable
-  logInfo "Import complete for table: $dbName.$dbSchemaName.$activeTable - RC: $RC"
-done
+  logInfo "Copying $origin  =to=>  $destination"
+  hadoop distcp -strategy dynamic "$origin" "$destination"
+}
+
+#TODO - Refactor?
+setActiveHDFSLocations() {
+  if stagingEnabled
+  then
+    if [[ "$importType" == "$IMPORT_TYPE_JOB" ]]
+    then
+      tableStagingDir="$stagingDir"
+    else
+      tableStagingDir="$stagingDir"/"$activeTable"
+    fi
+  fi
+
+  if [[ "$importType" == "$IMPORT_TYPE_JOB" ]]
+  then
+    tableDestinationDir="$destinationDir"
+  else
+    tableDestinationDir="$destinationDir"/"$activeTable"
+  fi
+}
+
+prepareDestination() {
+  deleteHDFSLocation "$tableDestinationDir"
+}
+
+prepareStaging() {
+  if stagingEnabled
+  then
+    logInfo "Staging import data in: $tableStagingDir"
+    deleteHDFSLocation "$tableStagingDir"
+  else
+    logInfo "Staging directory not specified, data will be imported directly to the destination"
+    prepareDestination
+  fi
+}
+
+moveStaging() {
+  if stagingEnabled
+  then
+    logInfo "Moving staging data to destination"
+    deleteHDFSLocation "$tableDestinationDir" "force"
+    copyHDFSLocation "$tableStagingDir" "$tableDestinationDir"
+  else
+    logInfo "Staging directory not specified, data was imported directly to the destination"
+  fi
+}
+
+executeSqoopCommand() {
+  buildSqoopCommand
+  logInfo "Executing Sqoop command:"
+  echo "$sqoopCommand"
+  
+  prepareStaging
+  
+  if eval "$sqoopCommand"
+  then
+    moveStaging
+  else
+    return 1
+  fi
+}
+
+executeSqoopJob() {
+  logInfo "Executing Sqoop job: $jobName"
+  executeSqoopCommand
+}
+
+# Imports table via a dynamic/built Sqoop command
+# importActiveTable
+importActiveTable() {
+  logInfo "Importing table: $dbName.$dbSchemaName.$activeTable"
+  executeSqoopCommand
+}
+
+if [[ "$importType" == "$IMPORT_TYPE_JOB" ]]
+then
+  setActiveHDFSLocations
+  try executeSqoopJob
+  logInfo "Job $jobName complete - RC: $RC"
+else
+  for table in "${tableList[@]}"; do
+    activeTable="$table"
+    setActiveHDFSLocations
+
+    try importActiveTable
+    logInfo "Import complete for table: $dbName.$dbSchemaName.$activeTable - RC: $RC"
+  done
+fi
 
 logInfo "All imports complete - Error Count: $ERRCNT"
 

@@ -5,7 +5,7 @@
 
 # Standard logging functions
 log () {
-  echo -e "$( date '+%Y/%m/%d %r' )$1"
+  echoWithPrefix "$1"
 }
 
 logInfo () {
@@ -13,7 +13,7 @@ logInfo () {
 }
 
 logError () {
-  log " - ERROR: $1"
+  >&2 log " - ERROR: $1"
 }
 
 logHeader () {
